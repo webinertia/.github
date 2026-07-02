@@ -1,0 +1,87 @@
+# Default GitHub labels
+- color: "ee0701"
+  name: "bug"
+  description: "Something isn't working"
+- color: "cccccc"
+  name: "duplicate"
+  description: "This issue or pull request already exists"
+- color: "a2eeef"
+  name: "enhancement"
+  description: "New feature or request"
+- color: "7057ff"
+  name: "good first issue"
+  description: "Good for newcomers"
+- color: "128a0c"
+  name: "help wanted"
+  description: "Extra attention is needed"
+- color: "e6e6e6"
+  name: "invalid"
+  description: "This doesn't seem right"
+- color: "cc317c"
+  name: "question"
+  description: "Further information is requested"
+- color: "ffffff"
+  name: "wontfix"
+  description: "This will not be worked on"
+
+# axleus labels
+- color: "0025ff"
+  name: "dependencies"
+  description: "Pull requests that update a dependency file"
+- color: "fbca04"
+  name: "the future"
+  description: "The Future"
+- color: "fbca04"
+  name: "qa"
+  description: "CI/CD/SA/Unit Testing"
+- color: "f9d0c4"
+  name: "stale"
+  description: "no activity"
+- color: "f9d0c4"
+  name: "onhold"
+  description: "Awaiting Maintainer Response"
+- name: "priority: critical",
+  color: "b60205",
+  description: ""
+- name: "priority: high",
+  color: "d93f0b",
+  description: ""
+- name: "priority: medium",
+  color: "fbca04",
+  description: ""
+- name: "priority: low",
+  color: "0e8a16",
+  description: ""
+- name: "status: can't reproduce",
+  color: "fec1c1",
+  description: ""
+- name: "status: confirmed",
+  color: "215cea",
+  description: ""
+- name: "status: duplicate",
+  color: "cfd3d7",
+  description: "This issue or pull request already exists"
+- name: "status: needs information",
+  color: "fef2c0",
+  description: ""
+- name: "type: rfc",
+  color: "d4c5f9",
+  description: "RFC"
+- name: "type: discussion",
+  color: "d4c5f9",
+  description: ""
+- name: "type: documentation",
+  color: "006b75",
+  description: ""
+- name: "type: enhancement",
+  color: "84b6eb",
+  description: ""
+- name: "type: feature request",
+  color: "fbca04",
+  description: "New feature or request"
+- name: "type: question",
+  color: "d876e3",
+  description: "Further information is requested"
+- name: "type: housekeeping",
+  color: "d876e3",
+  description: "Housekeeping/cleanup"

@@ -1,0 +1,67 @@
+name: Bug Report
+description: File a non security related bug report.
+labels: ["status: Not Confirmed"]
+body:
+  - type: input
+    id: packageversion
+    attributes:
+      label: Package Version
+      description: Which version of the component are you using?
+      placeholder: 0.0.1
+    validations:
+      required: true
+  - type: dropdown
+    id: phpversion
+    attributes:
+      label: Php Version
+      description: Which version of php?
+      options:
+        - 8.1
+        - 8.2
+        - 8.3
+        - 8.4
+      default: 2
+    validations:
+      required: true
+  - type: dropdown
+    id: databasetype
+    attributes:
+      label: Database Engine
+      description: What Database Engine are you running
+      options:
+        - N/A
+        - MySQL
+        - PostgreSQL
+        - SQLite
+  - type: textarea
+    id: basic
+    attributes:
+      label: Basic Information
+      description: What is the issue?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Describe the steps required to reproduce the issue.
+      value: |
+        1.
+        2.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What is the expected behavior?
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior?
+      description: What is the actual behavior?
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Info
+      description: Any additional information which may be useful.

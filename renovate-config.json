@@ -19,15 +19,15 @@
     "commitBodyTable": true,
     "lockFileMaintenance": {"enabled": true, "extends": ["schedule:daily"]},
     "platformAutomerge": true,
-    "prFooter": "[Read more information](https://github.com/webinertia/webinertia/blob/main/renovate.md) about the use of [Renovate Bot](https://github.com/renovatebot/renovate).",
+    "prFooter": "[Read more information](https://github.com/webinertia/.github/blob/main/renovate.md) about the use of [Renovate Bot](https://github.com/renovatebot/renovate).",
     "rangeStrategy": "replace",
     "rollbackPrs": true,
     "packageRules": [
         {"matchDepTypes": ["require"], "rangeStrategy": "widen"},
-        {"matchPackagePatterns": ["^webinertia/"], "groupSlug": "webinertia", "groupName": "Webinertia packages"},
+        {"matchPackagePatterns": ["^webinertia/"], "groupSlug": "webware", "groupName": "Webware packages"},
         {
             "matchPackageNames": ["php"],
-            "allowedVersions": "^8.0",
+            "allowedVersions": "^8.4.1",
             "extends": [":automergeDisabled", ":automergePr", ":label(Awaiting Maintainer Response)"],
             "ignoreUnstable": false,
             "groupName": "PHP"
