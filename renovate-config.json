@@ -26,6 +26,14 @@
         {"matchDepTypes": ["require"], "rangeStrategy": "widen"},
         {"matchPackagePatterns": ["^webinertia/"], "groupSlug": "webware", "groupName": "Webware packages"},
         {
+            "matchPackageNames": [
+                "webware/webware-acl",
+                "webware/webware-core",
+                "webware/webware-resultset"
+            ],
+            "enabled": false
+        },
+        {
             "matchPackageNames": ["php"],
             "allowedVersions": "^8.4.1",
             "extends": [":automergeDisabled", ":automergePr", ":label(Awaiting Maintainer Response)"],
