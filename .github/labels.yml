@@ -1,8 +1,24 @@
-# Default GitHub labels
-- color: "ee0701"
+# Org-wide canonical label set for the webinertia organisation.
+#
+# Every label the org-wide configuration references MUST exist here, otherwise the
+# reference silently no-ops in any repository that does not already have the label:
+#   .github/ISSUE_TEMPLATE/bug_report.yml -> status: Not Confirmed
+#   .github/ISSUE_TEMPLATE/rfc.yml        -> RFC
+#   renovate-config.json                  -> renovate, security,
+#                                            Awaiting Maintainer Response
+#
+# Naming: plain names for type/workflow labels; colon prefixes for the
+# priority:, status:, needs:, blocked:, version: and db: families.
+# Colours are grouped by family - reuse across families is intentional.
+
+# --- GitHub defaults ---
+- color: "d73a4a"
   name: "bug"
   description: "Something isn't working"
-- color: "cccccc"
+- color: "0075ca"
+  name: "documentation"
+  description: "Improvements or additions to documentation"
+- color: "cfd3d7"
   name: "duplicate"
   description: "This issue or pull request already exists"
 - color: "a2eeef"
@@ -11,77 +27,128 @@
 - color: "7057ff"
   name: "good first issue"
   description: "Good for newcomers"
-- color: "128a0c"
+- color: "008672"
   name: "help wanted"
   description: "Extra attention is needed"
-- color: "e6e6e6"
+- color: "e4e669"
   name: "invalid"
   description: "This doesn't seem right"
-- color: "cc317c"
+- color: "d876e3"
   name: "question"
   description: "Further information is requested"
 - color: "ffffff"
   name: "wontfix"
   description: "This will not be worked on"
 
-# axleus labels
-- color: "0025ff"
+# --- Workflow / process ---
+- color: "1d76db"
+  name: "merge-up"
+  description: "Must be merged up to the next minor/major branch after landing"
+- color: "d93f0b"
+  name: "breaking change"
+  description: "Backwards-incompatible; targets the next major branch"
+- color: "5319e7"
+  name: "blocked: upstream release"
+  description: "Blocked until an upstream component is tagged/released"
+- color: "b60205"
+  name: "wrong target branch"
+  description: "PR does not target the branch required by the branching strategy"
+- color: "d4c5f9"
+  name: "needs: issue"
+  description: "PR has no linked issue"
+- color: "d4c5f9"
+  name: "needs: tests"
+  description: "PR is missing tests"
+- color: "d4c5f9"
+  name: "needs: docs"
+  description: "PR is missing a documentation update"
+- color: "bfd4f2"
+  name: "RFC"
+  description: "RFC issue or pull request"
+- color: "b60205"
+  name: "ims-migration"
+  description: "Package moving out of the inventory-management-system application"
+- color: "bfdadc"
+  name: "tooling-alignment"
+  description: "Tooling alignment with webware-tools reusable workflow"
+
+# --- Quality tooling ---
+- color: "6f42c1"
+  name: "mago-fmt"
+  description: "mago format findings"
+- color: "8250df"
+  name: "mago-lint"
+  description: "mago lint findings"
+- color: "a475f9"
+  name: "mago-analysis"
+  description: "mago analyze findings"
+- color: "cf222e"
+  name: "infection"
+  description: "Infection mutation testing findings"
+
+# --- Dependencies / automation ---
+- color: "0366d6"
   name: "dependencies"
   description: "Pull requests that update a dependency file"
+- color: "45229e"
+  name: "php"
+  description: "Pull requests that update php code"
+- color: "ededed"
+  name: "renovate"
+  description: "Raised by the Renovate bot"
+- color: "b60205"
+  name: "security"
+  description: "Security related"
+- color: "ededed"
+  name: "Awaiting Maintainer Response"
+  description: "Awaiting a maintainer decision"
+
+# --- Priority (single org-wide scheme) ---
+- color: "b60205"
+  name: "priority: Critical"
+  description: "Blocking or time-critical work"
+- color: "d93f0b"
+  name: "priority: High"
+  description: ""
 - color: "fbca04"
-  name: "the future"
-  description: "The Future"
+  name: "priority: Medium"
+  description: ""
+- color: "0e8a16"
+  name: "priority: Low"
+  description: ""
+
+# --- Status ---
 - color: "fbca04"
-  name: "qa"
-  description: "CI/CD/SA/Unit Testing"
-- color: "f9d0c4"
-  name: "stale"
-  description: "no activity"
-- color: "f9d0c4"
-  name: "onhold"
-  description: "Awaiting Maintainer Response"
-- name: "priority: critical",
-  color: "b60205",
+  name: "status: Not Confirmed"
+  description: "Reported but not yet reproduced"
+- color: "21d436"
+  name: "status: Confirmed"
+  description: "Reproduced and confirmed"
+- color: "fec1c1"
+  name: "status: Can't Reproduce"
+  description: "Unable to reproduce the report"
+- color: "fef2c0"
+  name: "status: More Info Needed"
+  description: "Waiting on further information from the reporter"
+
+# --- Release target (mirrors the branching strategy in PULL_REQUEST_TEMPLATE.md) ---
+- color: "79b8ff"
+  name: "version: Next Patch"
+  description: "Lands on the current release branch"
+- color: "2188ff"
+  name: "version: Next Minor"
+  description: "Lands on the next minor branch"
+- color: "056099"
+  name: "version: Next Major"
+  description: "Lands on the next major branch"
+
+# --- Database engine (matches the bug report template dropdown) ---
+- color: "006b75"
+  name: "db: MySQL"
   description: ""
-- name: "priority: high",
-  color: "d93f0b",
+- color: "006b75"
+  name: "db: Postgres"
   description: ""
-- name: "priority: medium",
-  color: "fbca04",
+- color: "006b75"
+  name: "db: SQLite"
   description: ""
-- name: "priority: low",
-  color: "0e8a16",
-  description: ""
-- name: "status: can't reproduce",
-  color: "fec1c1",
-  description: ""
-- name: "status: confirmed",
-  color: "215cea",
-  description: ""
-- name: "status: duplicate",
-  color: "cfd3d7",
-  description: "This issue or pull request already exists"
-- name: "status: needs information",
-  color: "fef2c0",
-  description: ""
-- name: "type: rfc",
-  color: "d4c5f9",
-  description: "RFC"
-- name: "type: discussion",
-  color: "d4c5f9",
-  description: ""
-- name: "type: documentation",
-  color: "006b75",
-  description: ""
-- name: "type: enhancement",
-  color: "84b6eb",
-  description: ""
-- name: "type: feature request",
-  color: "fbca04",
-  description: "New feature or request"
-- name: "type: question",
-  color: "d876e3",
-  description: "Further information is requested"
-- name: "type: housekeeping",
-  color: "d876e3",
-  description: "Housekeeping/cleanup"

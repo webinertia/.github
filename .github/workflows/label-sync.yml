@@ -1,0 +1,78 @@
+name: "Label Sync"
+
+# Keeps every repository's labels identical to the org-wide canonical list in
+# .github/labels.yml. Runs whenever that list (or this workflow, or the script
+# it drives) changes, on demand, and weekly as a safety net so drift cannot
+# survive unnoticed.
+#
+# Dry runs: set the repository variable LABEL_SYNC_DRY_RUN to "true" and every
+# trigger below reports what it would change without writing anything — useful
+# for validating credentials on a push without touching a single label. Unset
+# it (or set it to anything else) to let the job write.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/labels.yml"
+      - ".github/workflows/label-sync.yml"
+      - "scripts/sync-labels.sh"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Report what would change without writing anything"
+        type: boolean
+        default: false
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: label-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: "Sync org labels"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Writing labels into *other* repositories needs a credential that outlives
+      # this one: the workflow GITHUB_TOKEN is scoped to webinertia/.github alone.
+      #
+      # One-time setup — create a GitHub App owned by the org, install it on all
+      # repositories, grant it "Issues: Read and write" + "Metadata: Read", then:
+      #   variable LABEL_SYNC_APP_ID         = the App's ID   (a variable, not a
+      #                                        secret, so the step can be gated)
+      #   secret   LABEL_SYNC_APP_PRIVATE_KEY = the App's private key
+      # Until those exist the job no-ops with a warning instead of failing.
+      - name: Mint org token
+        id: token
+        if: ${{ vars.LABEL_SYNC_APP_ID != '' }}
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.LABEL_SYNC_APP_ID }}
+          private-key: ${{ secrets.LABEL_SYNC_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Sync labels
+        if: ${{ steps.token.outputs.token != '' }}
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          args=(./scripts/sync-labels.sh .github/labels.yml)
+          if [[ "${{ inputs.dry-run }}" == "true" || "${{ vars.LABEL_SYNC_DRY_RUN }}" == "true" ]]; then
+            echo "::notice title=Dry run::LABEL_SYNC_DRY_RUN is set, so no labels will be written."
+            args+=(--dry-run)
+          fi
+          bash "${args[@]}"
+
+      - name: No credential configured
+        if: ${{ steps.token.outputs.token == '' }}
+        run: |
+          echo "::warning title=Label sync skipped::LABEL_SYNC_APP_ID / LABEL_SYNC_APP_PRIVATE_KEY are not set, so this job cannot write labels into other repositories. See the comments in .github/workflows/label-sync.yml for the one-time setup."
