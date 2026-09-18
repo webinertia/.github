@@ -40,23 +40,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Writing labels into *other* repositories needs a credential that outlives
       # this one: the workflow GITHUB_TOKEN is scoped to webinertia/.github alone.
       #
       # One-time setup — create a GitHub App owned by the org, install it on all
       # repositories, grant it "Issues: Read and write" + "Metadata: Read", then:
-      #   variable LABEL_SYNC_APP_ID         = the App's ID   (a variable, not a
-      #                                        secret, so the step can be gated)
+      #   variable LABEL_SYNC_APP_CLIENT_ID   = the App's client ID (a variable,
+      #                                         not a secret, so the step can be
+      #                                         gated; App IDs can change if the
+      #                                         App is ever transferred)
       #   secret   LABEL_SYNC_APP_PRIVATE_KEY = the App's private key
       # Until those exist the job no-ops with a warning instead of failing.
       - name: Mint org token
         id: token
-        if: ${{ vars.LABEL_SYNC_APP_ID != '' }}
-        uses: actions/create-github-app-token@v2
+        if: ${{ vars.LABEL_SYNC_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.LABEL_SYNC_APP_ID }}
+          client-id: ${{ vars.LABEL_SYNC_APP_CLIENT_ID }}
           private-key: ${{ secrets.LABEL_SYNC_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
 
@@ -75,4 +77,4 @@ jobs:
       - name: No credential configured
         if: ${{ steps.token.outputs.token == '' }}
         run: |
-          echo "::warning title=Label sync skipped::LABEL_SYNC_APP_ID / LABEL_SYNC_APP_PRIVATE_KEY are not set, so this job cannot write labels into other repositories. See the comments in .github/workflows/label-sync.yml for the one-time setup."
+          echo "::warning title=Label sync skipped::LABEL_SYNC_APP_CLIENT_ID / LABEL_SYNC_APP_PRIVATE_KEY are not set, so this job cannot write labels into other repositories. See the comments in .github/workflows/label-sync.yml for the one-time setup."
