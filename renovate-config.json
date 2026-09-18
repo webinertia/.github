@@ -24,7 +24,14 @@
     "rollbackPrs": true,
     "packageRules": [
         {"matchDepTypes": ["require"], "rangeStrategy": "widen"},
-        {"matchPackagePatterns": ["^webinertia/"], "groupSlug": "webware", "groupName": "Webware packages"},
+        {
+            "description": "Webware components: group updates and track their prereleases",
+            "matchPackageNames": ["webware/**"],
+            "groupSlug": "webware",
+            "groupName": "Webware packages",
+            "ignoreUnstable": false,
+            "respectLatest": false
+        },
         {
             "matchPackageNames": ["php"],
             "allowedVersions": "^8.4.1",
