@@ -87,31 +87,207 @@ jobs:
             echo "test_env_json=$(jq -c '.test_env_json // {}' "$file")"
           } >> "$GITHUB_OUTPUT"
 
-  ci:
-    name: "CI"
+  mago:
+    name: "Mago (PHP ${{ matrix.php }})"
     needs: config
-    # Explicit cross-repo form: when this adapter is triggered by the ruleset it
-    # runs in the TARGET repository's context, so `./` would be ambiguous.
-    #
-    # This is the single place the tooling line is pinned. A bump here changes
-    # CI for every repository at once; the per-repository webware-ci.json files
-    # carry no ref and therefore cannot drift.
-    uses: webinertia/webware-tools/.github/workflows/continuous-integration.yml@1.0.x
-    secrets: inherit
-    with:
-      php-versions: ${{ needs.config.outputs.php_versions }}
-      run-integration: ${{ fromJSON(needs.config.outputs.run_integration) }}
-      integration-php-version: ${{ needs.config.outputs.integration_php_version }}
-      composer-options: ${{ needs.config.outputs.composer_options }}
-      db-image: ${{ needs.config.outputs.db_image }}
-      db-env-json: ${{ needs.config.outputs.db_env_json }}
-      db-port: ${{ needs.config.outputs.db_port }}
-      db-health-cmd: ${{ needs.config.outputs.db_health_cmd }}
-      db-health-retries: ${{ fromJSON(needs.config.outputs.db_health_retries) }}
-      db-health-interval-seconds: ${{ fromJSON(needs.config.outputs.db_health_interval_seconds) }}
-      enable-codecov: ${{ fromJSON(needs.config.outputs.enable_codecov) }}
-      enable-infection: ${{ fromJSON(needs.config.outputs.enable_infection) }}
-      coverage-php-version: ${{ needs.config.outputs.coverage_php_version }}
-      min-msi: ${{ needs.config.outputs.min_msi }}
-      min-covered-msi: ${{ needs.config.outputs.min_covered_msi }}
-      test-env-json: ${{ needs.config.outputs.test_env_json }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ${{ fromJSON(needs.config.outputs.php_versions) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up PHP and Mago
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          cache: composer
+          tools: mago:1.49.0
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+
+      # Overrides php-version from the repository's mago.toml for each matrix
+      # leg without mutating the committed config file.
+      - name: Pin Mago PHP version
+        run: echo "MAGO_PHP_VERSION=${{ matrix.php }}" >> "$GITHUB_ENV"
+
+      - name: Check formatting
+        run: mago format --check
+
+      - name: Lint
+        if: success() || failure()
+        run: mago lint
+
+      - name: Analyze
+        if: success() || failure()
+        run: mago analyze
+
+      - name: Guard
+        if: success() || failure()
+        run: mago guard
+
+  test:
+    name: "Test (PHP ${{ matrix.php }} | ${{ matrix.dependencies }})"
+    needs: config
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ${{ fromJSON(needs.config.outputs.php_versions) }}
+        dependencies: ["lowest", "locked", "latest"]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: ${{ (matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked') && 'pcov' || 'none' }}
+          cache: composer
+
+      # The DB is a manual step, not a native `services:` block, because
+      # `services:` cannot be conditionally omitted and driver packages need
+      # different engines (mysql, postgres, mariadb, oracle, mssql, ...).
+      # A repository with no DB simply omits `db_image`, so both steps skip.
+      #
+      # Pulling and booting the DB costs ~20-25s per leg, which dominates a
+      # test leg, so it only starts where the integration suite will run.
+      # `integration_php_version` narrows that to a single leg; empty keeps
+      # the original behaviour of running integration on every leg.
+      - name: Start DB service
+        if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration) && (needs.config.outputs.integration_php_version == '' || matrix.php == needs.config.outputs.integration_php_version)
+        run: |
+          docker run -d --name db \
+            -p ${{ needs.config.outputs.db_port }}:${{ needs.config.outputs.db_port }} \
+            $(echo '${{ needs.config.outputs.db_env_json }}' | jq -r 'to_entries[] | "-e \(.key)=\(.value)"' | tr '\n' ' ') \
+            ${{ needs.config.outputs.db_image }}
+
+      - name: Wait for DB to be healthy
+        if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration) && (needs.config.outputs.integration_php_version == '' || matrix.php == needs.config.outputs.integration_php_version)
+        run: |
+          for i in $(seq 1 ${{ fromJSON(needs.config.outputs.db_health_retries) }}); do
+            docker exec db ${{ needs.config.outputs.db_health_cmd }} && exit 0
+            sleep ${{ fromJSON(needs.config.outputs.db_health_interval_seconds) }}
+          done
+          echo "DB did not become healthy in time" && exit 1
+
+      - name: Install dependencies (lowest)
+        if: matrix.dependencies == 'lowest'
+        run: composer update --prefer-lowest --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+
+      - name: Install dependencies (locked)
+        if: matrix.dependencies == 'locked'
+        run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+
+      - name: Install dependencies (latest)
+        if: matrix.dependencies == 'latest'
+        run: composer update --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+
+      # PHPUnit's <env> will not override an already-set real env var (no
+      # force="true"), so this lets a repository override a connection setting
+      # for CI without editing phpunit.xml.dist, which needs different values
+      # for local dev (e.g. Docker Compose networking).
+      - name: Export test environment overrides
+        if: needs.config.outputs.test_env_json != '{}'
+        run: echo '${{ needs.config.outputs.test_env_json }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+
+      - name: Unit tests
+        if: ${{ !(matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked') }}
+        run: composer test
+
+      - name: Unit tests with coverage
+        if: matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked'
+        run: composer test-coverage
+
+      - name: Integration tests
+        if: fromJSON(needs.config.outputs.run_integration) && (needs.config.outputs.integration_php_version == '' || matrix.php == needs.config.outputs.integration_php_version)
+        run: composer test-integration
+
+      - name: Upload coverage artifact
+        if: matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-clover
+          path: clover.xml
+
+  codecov:
+    name: "Codecov"
+    needs: [config, test]
+    if: fromJSON(needs.config.outputs.enable_codecov)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-clover
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          # CODECOV_TOKEN is an org-wide upload token, which cannot infer the
+          # target repository the way a repository-specific token can.
+          # `github.repository` resolves to the target repository here.
+          slug: ${{ github.repository }}
+          files: clover.xml
+          # Report-only across the fleet; do not fail CI on upload issues.
+          fail_ci_if_error: false
+
+  mutation-test:
+    name: "Mutation testing"
+    needs: [config, test]
+    if: fromJSON(needs.config.outputs.enable_infection)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up PHP and Mago
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ needs.config.outputs.coverage_php_version }}
+          coverage: pcov
+          cache: composer
+          tools: mago:1.49.0
+
+      - name: Start DB service
+        if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration)
+        run: |
+          docker run -d --name db \
+            -p ${{ needs.config.outputs.db_port }}:${{ needs.config.outputs.db_port }} \
+            $(echo '${{ needs.config.outputs.db_env_json }}' | jq -r 'to_entries[] | "-e \(.key)=\(.value)"' | tr '\n' ' ') \
+            ${{ needs.config.outputs.db_image }}
+
+      - name: Wait for DB to be healthy
+        if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration)
+        run: |
+          for i in $(seq 1 ${{ fromJSON(needs.config.outputs.db_health_retries) }}); do
+            docker exec db ${{ needs.config.outputs.db_health_cmd }} && exit 0
+            sleep ${{ fromJSON(needs.config.outputs.db_health_interval_seconds) }}
+          done
+          echo "DB did not become healthy in time" && exit 1
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+
+      - name: Export test environment overrides
+        if: needs.config.outputs.test_env_json != '{}'
+        run: echo '${{ needs.config.outputs.test_env_json }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+
+      - name: Pin Mago PHP version
+        run: echo "MAGO_PHP_VERSION=${{ needs.config.outputs.coverage_php_version }}" >> "$GITHUB_ENV"
+
+      # Mago is invoked internally by Infection (staticAnalysisTool in
+      # infection.json5), not by this workflow directly -- no needs:[mago] here.
+      - name: Mutation testing
+        env:
+          INFECTION_DASHBOARD_API_KEY: ${{ secrets.INFECTION_DASHBOARD_API_KEY }}
+        run: composer mutation-test -- --min-msi=${{ needs.config.outputs.min_msi }} --min-covered-msi=${{ needs.config.outputs.min_covered_msi }} --logger-github
