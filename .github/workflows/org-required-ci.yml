@@ -104,8 +104,20 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          cache: composer
           tools: mago:1.49.0
+
+      # setup-php declares no cache input; caching is done with actions/cache
+      # over composer's own cache directory, as its README documents.
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php-${{ matrix.php }}-
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
@@ -148,7 +160,17 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: ${{ (matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked') && 'pcov' || 'none' }}
-          cache: composer
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php-${{ matrix.php }}-${{ matrix.dependencies }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php-${{ matrix.php }}-
 
       # The DB is a manual step, not a native `services:` block, because
       # `services:` cannot be conditionally omitted and driver packages need
@@ -255,8 +277,18 @@ jobs:
         with:
           php-version: ${{ needs.config.outputs.coverage_php_version }}
           coverage: pcov
-          cache: composer
           tools: mago:1.49.0
+
+      - name: Get composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: composer-${{ runner.os }}-php-${{ needs.config.outputs.coverage_php_version }}-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-${{ runner.os }}-php-${{ needs.config.outputs.coverage_php_version }}-
 
       - name: Start DB service
         if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration)
