@@ -1,0 +1,105 @@
+name: "Required CI"
+
+# Invoked DIRECTLY by GitHub, through the organization ruleset rule
+# "Require workflows to pass before merging":
+#
+#   repository_id: 653703736             (webinertia/.github)
+#   path:          .github/workflows/org-required-ci.yml
+#   ref:           master
+#
+# It lives here rather than in webware-tools because webware-tools is a
+# released package: its N.N.x branches are release lines, and making one of
+# them the control plane for every repository's CI couples package releases to
+# org governance. This repository is org config and is never published.
+#
+# GitHub triggers this file itself, so per-repository variation cannot arrive
+# as `with:` inputs the way it does for a consumer's `uses:` call. It is read
+# at runtime from the target repository's `.github/webware-ci.json` -- a file
+# that carries values only and NO workflow ref, so it cannot drift.
+
+on:
+  pull_request:
+    branches:
+      - "[0-9]+.[0-9]+.x"
+
+permissions:
+  contents: read
+
+jobs:
+  config:
+    name: "Read .github/webware-ci.json"
+    runs-on: ubuntu-latest
+    outputs:
+      php_versions: ${{ steps.read.outputs.php_versions }}
+      run_integration: ${{ steps.read.outputs.run_integration }}
+      integration_php_version: ${{ steps.read.outputs.integration_php_version }}
+      composer_options: ${{ steps.read.outputs.composer_options }}
+      db_image: ${{ steps.read.outputs.db_image }}
+      db_env_json: ${{ steps.read.outputs.db_env_json }}
+      db_port: ${{ steps.read.outputs.db_port }}
+      db_health_cmd: ${{ steps.read.outputs.db_health_cmd }}
+      db_health_retries: ${{ steps.read.outputs.db_health_retries }}
+      db_health_interval_seconds: ${{ steps.read.outputs.db_health_interval_seconds }}
+      enable_codecov: ${{ steps.read.outputs.enable_codecov }}
+      enable_infection: ${{ steps.read.outputs.enable_infection }}
+      coverage_php_version: ${{ steps.read.outputs.coverage_php_version }}
+      min_msi: ${{ steps.read.outputs.min_msi }}
+      min_covered_msi: ${{ steps.read.outputs.min_covered_msi }}
+      test_env_json: ${{ steps.read.outputs.test_env_json }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Read config
+        id: read
+        run: |
+          set -euo pipefail
+          file=.github/webware-ci.json
+          [ -f "$file" ] || echo '{}' > "$file"
+          {
+            echo "php_versions=$(jq -c '.php_versions // ["8.4", "8.5"]' "$file")"
+            echo "run_integration=$(jq -r '.run_integration // false' "$file")"
+            echo "integration_php_version=$(jq -r '.integration_php_version // ""' "$file")"
+            echo "composer_options=$(jq -r '.composer_options // ""' "$file")"
+            echo "db_image=$(jq -r '.db_image // ""' "$file")"
+            echo "db_env_json=$(jq -c '.db_env_json // {}' "$file")"
+            echo "db_port=$(jq -r '.db_port // ""' "$file")"
+            echo "db_health_cmd=$(jq -r '.db_health_cmd // ""' "$file")"
+            echo "db_health_retries=$(jq -r '.db_health_retries // 30' "$file")"
+            echo "db_health_interval_seconds=$(jq -r '.db_health_interval_seconds // 2' "$file")"
+            echo "enable_codecov=$(jq -r '.enable_codecov // false' "$file")"
+            echo "enable_infection=$(jq -r '.enable_infection // false' "$file")"
+            echo "coverage_php_version=$(jq -r '.coverage_php_version // ""' "$file")"
+            echo "min_msi=$(jq -r '.min_msi // "10"' "$file")"
+            echo "min_covered_msi=$(jq -r '.min_covered_msi // "10"' "$file")"
+            echo "test_env_json=$(jq -c '.test_env_json // {}' "$file")"
+          } >> "$GITHUB_OUTPUT"
+
+  ci:
+    name: "CI"
+    needs: config
+    # Explicit cross-repo form: when this adapter is triggered by the ruleset it
+    # runs in the TARGET repository's context, so `./` would be ambiguous.
+    #
+    # This is the single place the tooling line is pinned. A bump here changes
+    # CI for every repository at once; the per-repository webware-ci.json files
+    # carry no ref and therefore cannot drift.
+    uses: webinertia/webware-tools/.github/workflows/continuous-integration.yml@1.0.x
+    secrets: inherit
+    with:
+      php-versions: ${{ needs.config.outputs.php_versions }}
+      run-integration: ${{ fromJSON(needs.config.outputs.run_integration) }}
+      integration-php-version: ${{ needs.config.outputs.integration_php_version }}
+      composer-options: ${{ needs.config.outputs.composer_options }}
+      db-image: ${{ needs.config.outputs.db_image }}
+      db-env-json: ${{ needs.config.outputs.db_env_json }}
+      db-port: ${{ needs.config.outputs.db_port }}
+      db-health-cmd: ${{ needs.config.outputs.db_health_cmd }}
+      db-health-retries: ${{ fromJSON(needs.config.outputs.db_health_retries) }}
+      db-health-interval-seconds: ${{ fromJSON(needs.config.outputs.db_health_interval_seconds) }}
+      enable-codecov: ${{ fromJSON(needs.config.outputs.enable_codecov) }}
+      enable-infection: ${{ fromJSON(needs.config.outputs.enable_infection) }}
+      coverage-php-version: ${{ needs.config.outputs.coverage_php_version }}
+      min-msi: ${{ needs.config.outputs.min_msi }}
+      min-covered-msi: ${{ needs.config.outputs.min_covered_msi }}
+      test-env-json: ${{ needs.config.outputs.test_env_json }}
