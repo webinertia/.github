@@ -99,7 +99,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          tools: mago:1.49.0
+          tools: mago:1.50.0
 
       # setup-php declares no cache input; caching is done with actions/cache
       # over composer's own cache directory, as its README documents.
@@ -272,7 +272,7 @@ jobs:
         with:
           php-version: ${{ needs.config.outputs.coverage_php_version }}
           coverage: pcov
-          tools: mago:1.49.0
+          tools: mago:1.50.0
 
       - name: Get composer cache directory
         id: composer-cache
