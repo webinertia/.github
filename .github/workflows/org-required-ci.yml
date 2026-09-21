@@ -56,18 +56,13 @@ jobs:
         run: |
           set -euo pipefail
           # Root is the canonical location, beside mago.toml and the other tool
-          # config. The .github/ path is a temporary fallback while the
-          # existing repositories migrate.
-          file=""
-          for candidate in webware-ci.json .github/webware-ci.json; do
-            if [ -f "$candidate" ]; then file="$candidate"; break; fi
-          done
-          if [ -z "$file" ]; then
+          # config in these repositories.
+          file=webware-ci.json
+          if [ ! -f "$file" ]; then
             echo "::error::webware-ci.json not found in the repository root."
             echo "::error::Repositories targeted by the org required-workflow ruleset must provide one. See webinertia/.github."
             exit 1
           fi
-          echo "Using $file"
           {
             echo "php_versions=$(jq -c '.php_versions // ["8.4", "8.5"]' "$file")"
             echo "run_integration=$(jq -r '.run_integration // false' "$file")"
