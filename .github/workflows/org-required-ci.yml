@@ -14,8 +14,9 @@ name: "Required CI"
 #
 # GitHub triggers this file itself, so per-repository variation cannot arrive
 # as `with:` inputs the way it does for a consumer's `uses:` call. It is read
-# at runtime from the target repository's `.github/webware-ci.json` -- a file
-# that carries values only and NO workflow ref, so it cannot drift.
+# at runtime from `webware-ci.json` in the target repository's root -- beside
+# the other tool config (mago.toml, phpunit.xml.dist, infection.json5.dist) --
+# a file that carries values only and NO workflow ref, so it cannot drift.
 
 on:
   pull_request:
@@ -27,7 +28,7 @@ permissions:
 
 jobs:
   config:
-    name: "Read .github/webware-ci.json"
+    name: "Read webware-ci.json"
     runs-on: ubuntu-latest
     outputs:
       php_versions: ${{ steps.read.outputs.php_versions }}
@@ -54,8 +55,19 @@ jobs:
         id: read
         run: |
           set -euo pipefail
-          file=.github/webware-ci.json
-          [ -f "$file" ] || echo '{}' > "$file"
+          # Root is the canonical location, beside mago.toml and the other tool
+          # config. The .github/ path is a temporary fallback while the
+          # existing repositories migrate.
+          file=""
+          for candidate in webware-ci.json .github/webware-ci.json; do
+            if [ -f "$candidate" ]; then file="$candidate"; break; fi
+          done
+          if [ -z "$file" ]; then
+            echo "::error::webware-ci.json not found in the repository root."
+            echo "::error::Repositories targeted by the org required-workflow ruleset must provide one. See webinertia/.github."
+            exit 1
+          fi
+          echo "Using $file"
           {
             echo "php_versions=$(jq -c '.php_versions // ["8.4", "8.5"]' "$file")"
             echo "run_integration=$(jq -r '.run_integration // false' "$file")"
