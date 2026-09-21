@@ -82,6 +82,35 @@ jobs:
             echo "test_env_json=$(jq -c '.test_env_json // {}' "$file")"
           } >> "$GITHUB_OUTPUT"
 
+      # The Mago version has exactly ONE home: the `version =` pin in
+      # webinertia/webware-tools/mago.toml, resolved at run time by the mago and
+      # mutation-test jobs and by each repository's tooling container. A literal
+      # anywhere else re-introduces the drift this workflow exists to prevent,
+      # so it fails the build instead of passing silently.
+      - name: Reject duplicated Mago version pins
+        if: github.repository != 'webinertia/webware-tools'
+        run: |
+          set -euo pipefail
+          failed=0
+
+          scan() {
+            description="$1"
+            shift
+            if found=$(grep -rInE "$@" --exclude-dir=vendor --exclude-dir=.git . 2>/dev/null); then
+              printf '::error::%s\n' "$description"
+              printf '%s\n' "$found"
+              failed=1
+            fi
+          }
+
+          scan 'Dockerfile pins Mago with a literal build arg; it is derived from the webware-tools pin.' --include=Dockerfile '^ARG[[:space:]]+MAGO_VERSION[[:space:]]*='
+          scan 'compose.yml passes a literal Mago build arg; the Dockerfile derives it.' --include='compose*.yml' --include='compose*.yaml' '^[[:space:]]*MAGO_VERSION[[:space:]]*:'
+          scan 'A workflow installs a literal Mago version.' --include='*.yml' --include='*.yaml' 'tools:[[:space:]]*mago:[0-9]'
+          scan 'mago.toml restates the Mago version pin; it is inherited from webware/webware-tools.' --include='mago.toml' '^[[:space:]]*version[[:space:]]*=[[:space:]]*"'
+          scan 'mago.toml pins the editor schema to a Mago version; use the unpinned URL.' --include='mago.toml' '#:schema.*mago\.carthage\.software/[0-9]'
+
+          exit "$failed"
+
   mago:
     name: "Mago (PHP ${{ matrix.php }})"
     needs: config
@@ -94,12 +123,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up PHP and Mago
+      - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
           coverage: none
-          tools: mago:1.50.0
 
       # setup-php declares no cache input; caching is done with actions/cache
       # over composer's own cache directory, as its README documents.
@@ -119,6 +147,33 @@ jobs:
 
       # Overrides php-version from the repository's mago.toml for each matrix
       # leg without mutating the committed config file.
+      # Mago is NOT pinned in this workflow. Its version is read from the
+      # webware-tools mago.toml that composer actually installed, so the binary
+      # always matches the `version =` pin that mago itself enforces. That pin
+      # has exactly one home: webinertia/webware-tools/mago.toml.
+      - name: Resolve Mago version
+        id: mago-version
+        run: |
+          set -euo pipefail
+          pin=vendor/webware/webware-tools/mago.toml
+          if [ ! -f "$pin" ]; then
+            echo "::error::$pin not found. Did composer install resolve webware/webware-tools?"
+            exit 1
+          fi
+          version=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' "$pin" | head -n1)
+          if [ -z "$version" ]; then
+            echo "::error::No 'version = \"x.y.z\"' pin found in $pin."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Mago ${{ steps.mago-version.outputs.version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: mago:${{ steps.mago-version.outputs.version }}
+
       - name: Pin Mago PHP version
         run: echo "MAGO_PHP_VERSION=${{ matrix.php }}" >> "$GITHUB_ENV"
 
@@ -267,12 +322,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Set up PHP and Mago
+      - name: Set up PHP
         uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ needs.config.outputs.coverage_php_version }}
           coverage: pcov
-          tools: mago:1.50.0
 
       - name: Get composer cache directory
         id: composer-cache
@@ -304,6 +358,31 @@ jobs:
 
       - name: Install dependencies
         run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+
+      # Mago is NOT pinned in this workflow either; see the mago job for the
+      # rationale. The version comes from the installed webware-tools pin.
+      - name: Resolve Mago version
+        id: mago-version
+        run: |
+          set -euo pipefail
+          pin=vendor/webware/webware-tools/mago.toml
+          if [ ! -f "$pin" ]; then
+            echo "::error::$pin not found. Did composer install resolve webware/webware-tools?"
+            exit 1
+          fi
+          version=$(sed -nE 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' "$pin" | head -n1)
+          if [ -z "$version" ]; then
+            echo "::error::No 'version = \"x.y.z\"' pin found in $pin."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Mago ${{ steps.mago-version.outputs.version }}
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ needs.config.outputs.coverage_php_version }}
+          coverage: pcov
+          tools: mago:${{ steps.mago-version.outputs.version }}
 
       - name: Export test environment overrides
         if: needs.config.outputs.test_env_json != '{}'
