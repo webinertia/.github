@@ -15,14 +15,19 @@
         "group:allNonMajor"
     ],
     "commitBodyTable": true,
-    "lockFileMaintenance": {"enabled": true, "extends": ["schedule:daily"]},
+    "lockFileMaintenance": {"enabled": true, "extends": ["schedule:weekly"]},
     "automerge": false,
     "platformAutomerge": false,
-    "prFooter": "[Read more information](https://github.com/webinertia/.github/blob/main/renovate.md) about the use of [Renovate Bot](https://github.com/renovatebot/renovate).",
+    "prFooter": "[Read more information](https://github.com/webinertia/.github/blob/master/renovate.md) about the use of [Renovate Bot](https://github.com/renovatebot/renovate).",
     "rangeStrategy": "replace",
     "rollbackPrs": true,
     "packageRules": [
         {"matchDepTypes": ["require"], "rangeStrategy": "widen"},
+        {
+            "description": "Webware components always move to the latest release, so replace the constraint with the new floor instead of widening it. Widening turns a constraint into an OR-range (^1.0 || ^2.0), which prefer-stable then resolves back to the older stable line, and which grows a duplicate alternative on the next release (^1.0 || ^2.0 || ^2.0).",
+            "matchPackageNames": ["webware/**", "webinertia/**"],
+            "rangeStrategy": "replace"
+        },
         {
             "description": "Webware components: group updates and track their prereleases",
             "matchPackageNames": ["webware/**"],
