@@ -1,4 +1,4 @@
-name: "Required CI"
+name: "Continuous Integration"
 
 # Invoked DIRECTLY by GitHub, through the organization ruleset rule
 # "Require workflows to pass before merging":
@@ -19,6 +19,15 @@ name: "Required CI"
 # a file that carries values only and NO workflow ref, so it cannot drift.
 
 on:
+  # Fires for the commit a merge CREATES on the version branch. That run is what
+  # puts the green check on the repository UI's history and keeps the README
+  # badge current; it is not what any gate depends on. The ruleset requires this
+  # workflow by repository + path + ref and gates on the pull_request run below,
+  # so dropping this trigger silently costs the ticks without breaking a gate.
+  # Cost is one extra matrix per merge, and these repositories are public.
+  push:
+    branches:
+      - "[0-9]+.[0-9]+.x"
   pull_request:
     branches:
       - "[0-9]+.[0-9]+.x"
