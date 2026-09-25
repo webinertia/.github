@@ -19,15 +19,20 @@ name: "Continuous Integration"
 # a file that carries values only and NO workflow ref, so it cannot drift.
 
 on:
-  # Fires for the commit a merge CREATES on the version branch. That run is what
-  # puts the green check on the repository UI's history and keeps the README
-  # badge current; it is not what any gate depends on. The ruleset requires this
-  # workflow by repository + path + ref and gates on the pull_request run below,
-  # so dropping this trigger silently costs the ticks without breaking a gate.
-  # Cost is one extra matrix per merge, and these repositories are public.
-  push:
-    branches:
-      - "[0-9]+.[0-9]+.x"
+  # pull_request ONLY, and that is not an oversight. A workflow invoked by the
+  # ruleset is started by GitHub for the pull_request event and nothing else, so
+  # a `push:` trigger here is inert. Measured 2026-09-24 by merging
+  # webware-console#30 onto 1.0.x with such a trigger in place: the merge commit
+  # carried 0 check runs and was no run's head_sha, and that repository's run
+  # history is pull_request-only back to 2026-09-21. Push runs come only from
+  # workflows that LIVE in the pushed repository -- message-bus's
+  # backward-compatibility-check.yml runs on push for exactly that reason.
+  #
+  # Consequences, accepted rather than fixed by reintroducing per-repository
+  # workflows: merge commits carry no checks, so the repository UI shows no tick
+  # on them, and the required-workflow badge label stays at whatever the last PR
+  # run recorded. Neither affects gating -- the pull_request run is what the
+  # ruleset requires.
   pull_request:
     branches:
       - "[0-9]+.[0-9]+.x"
