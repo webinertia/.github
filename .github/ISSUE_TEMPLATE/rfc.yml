@@ -4,6 +4,16 @@ title: "[RFC]: "
 labels: ["RFC"]
 projects: ["webinertia/"]
 body:
+  - type: checkboxes
+    id: decision
+    attributes:
+      label: Decision
+      description: Tick one when the RFC has been decided.
+      options:
+        - label: Accepted
+          required: false
+        - label: Declined
+          required: false
   - type: input
     id: version
     attributes:
