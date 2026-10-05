@@ -42,6 +42,12 @@
             "extends": [":automergeDisabled", ":automergePr", ":label(Awaiting Maintainer Response)"],
             "ignoreUnstable": false,
             "groupName": "PHP"
+        },
+        {
+            "description": "MySQL is pinned to the 9.7 LTS line on purpose. Docker tags carry no LTS/innovation distinction, so a higher number reads as a routine major bump and silently moves the dev database onto the innovation track: mysql:26.7 is innovation while the image's own lts tag resolves to 9.7.2. Patches within 9.7 are still proposed; changing lines must be a deliberate edit, not a Renovate PR.",
+            "matchDatasources": ["docker"],
+            "matchPackageNames": ["mysql"],
+            "allowedVersions": "/^9\\.7(\\.[0-9]+)?$/"
         }
     ],
     "vulnerabilityAlerts": {
