@@ -1,5 +1,5 @@
 {
-  "name": "Webware required CI",
+  "name": "Continuous Integration",
   "target": "branch",
   "enforcement": "active",
   "bypass_actors": [
