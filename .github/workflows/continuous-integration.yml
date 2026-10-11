@@ -4,7 +4,7 @@ name: "Continuous Integration"
 # "Require workflows to pass before merging":
 #
 #   repository_id: 653703736             (webinertia/.github)
-#   path:          .github/workflows/org-required-ci.yml
+#   path:          .github/workflows/continuous-integration.yml
 #   ref:           master
 #
 # It lives here rather than in webware-tools because webware-tools is a
