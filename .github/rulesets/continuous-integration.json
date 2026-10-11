@@ -10,8 +10,13 @@
     }
   ],
   "conditions": {
-    "repository_name": {
-      "include": ["webware-*"],
+    "repository_property": {
+      "include": [
+        {
+          "name": "ci-target",
+          "property_values": ["true"]
+        }
+      ],
       "exclude": []
     },
     "ref_name": {
