@@ -316,7 +316,7 @@ jobs:
           name: coverage-clover
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           # CODECOV_TOKEN is an org-wide upload token, which cannot infer the
