@@ -206,9 +206,21 @@ jobs:
         if: success() || failure()
         run: mago guard
 
+  # Mago is the fastest signal in this workflow: it needs no database, runs no
+  # test suite, and typically finishes in 20-30s, against 30-105s for a single
+  # mutation run. It therefore gates the two jobs that cost real time, so a PR
+  # with a lint, analysis or guard finding stops after the cheapest stage that
+  # can detect it instead of burning six test legs and a mutation run on code
+  # that cannot merge.
+  #
+  # `needs: mago` requires every leg of the matrix to pass, which is intended:
+  # one PHP version failing Mago blocks downstream, because the PR is red either
+  # way. `fail-fast: false` on the mago job is kept so both legs still report,
+  # rather than an 8.4 failure cancelling the 8.5 run that may hold the rest of
+  # the findings.
   test:
     name: "Test (PHP ${{ matrix.php }} | ${{ matrix.dependencies }})"
-    needs: config
+    needs: [config, mago]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -327,9 +339,12 @@ jobs:
           # Report-only across the fleet; do not fail CI on upload issues.
           fail_ci_if_error: false
 
+  # The mago edge here is redundant in practice, since test already depends on
+  # mago and a skipped dependency skips this job. It is declared anyway so the
+  # rule reads at the job it protects rather than being inferred through test.
   mutation-test:
     name: "Mutation testing"
-    needs: [config, test]
+    needs: [config, test, mago]
     if: fromJSON(needs.config.outputs.enable_infection)
     runs-on: ubuntu-latest
     steps:
@@ -406,7 +421,9 @@ jobs:
         run: echo "MAGO_PHP_VERSION=${{ needs.config.outputs.coverage_php_version }}" >> "$GITHUB_ENV"
 
       # Mago is invoked internally by Infection (staticAnalysisTool in
-      # infection.json5), not by this workflow directly -- no needs:[mago] here.
+      # infection.json5) as a per-mutant equivalence filter, which is a separate
+      # concern from the job dependency above: that one decides whether this job
+      # starts at all, this one runs Mago per mutant inside it.
       - name: Mutation testing
         env:
           INFECTION_DASHBOARD_API_KEY: ${{ secrets.INFECTION_DASHBOARD_API_KEY }}
