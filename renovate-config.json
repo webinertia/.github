@@ -44,6 +44,29 @@
             "groupName": "PHP"
         },
         {
+            "description": "Docker images: own group, automerge patches and minors. The separate group is required, not cosmetic: group:allNonMajor groups every ecosystem into one branch, and a branch only automerges when every upgrade in it is automergeable, so a Docker update sharing a branch with a Composer update would never automerge. Majors stay manual via :separateMajorReleases, and rollbacks carry their own updateType so they are never matched here.",
+            "matchDatasources": ["docker"],
+            "matchUpdateTypes": ["patch", "minor"],
+            "groupName": "Docker images",
+            "groupSlug": "docker-images",
+            "automerge": true,
+            "platformAutomerge": true
+        },
+        {
+            "description": "PHP tooling image: follow the 8.4 and 8.5 lines. The ^8.4.1 range on the php rule above excludes every 8.5 release, which capped the tooling image at 8.4 and, because rollbackPrs is enabled, would propose rolling 8.5 back down.",
+            "matchDatasources": ["docker"],
+            "matchPackageNames": ["php"],
+            "allowedVersions": "/^(8\\.4|8\\.5)\\.[0-9]+$/"
+        },
+        {
+            "description": "PHP tooling image: patch only for automerge. A PHP minor moves the analyser and the CI target at the same time, so it stays a deliberate edit.",
+            "matchDatasources": ["docker"],
+            "matchPackageNames": ["php"],
+            "matchUpdateTypes": ["minor"],
+            "automerge": false,
+            "platformAutomerge": false
+        },
+        {
             "description": "MySQL is pinned to the 9.7 LTS line on purpose. Docker tags carry no LTS/innovation distinction, so a higher number reads as a routine major bump and silently moves the dev database onto the innovation track: mysql:26.7 is innovation while the image's own lts tag resolves to 9.7.2. Patches within 9.7 are still proposed; changing lines must be a deliberate edit, not a Renovate PR.",
             "matchDatasources": ["docker"],
             "matchPackageNames": ["mysql"],
