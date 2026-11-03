@@ -71,6 +71,12 @@
             "matchDatasources": ["docker"],
             "matchPackageNames": ["mysql"],
             "allowedVersions": "/^9\\.7(\\.[0-9]+)?$/"
+        },
+        {
+            "description": "Node tooling image: stay on the 26 LTS line. Node majors alternate, with even numbers shipping as LTS and odd numbers as Current, and a Docker tag carries no such distinction, so an unbounded rule offers node:27 as an ordinary upgrade and quietly moves the tooling image onto a line that is short lived. The docs tooling image pins ARG NODE_VERSION=26.13.0 and builds FROM node:${NODE_VERSION}-trixie-slim, so 26 is the line in use. Because rollbackPrs is enabled, a deliberate move to a new line also has to edit this rule, otherwise Renovate proposes rolling the image back.",
+            "matchDatasources": ["docker"],
+            "matchPackageNames": ["node"],
+            "allowedVersions": "/^26\\.[0-9]+(\\.[0-9]+)?$/"
         }
     ],
     "vulnerabilityAlerts": {
