@@ -174,6 +174,27 @@ jobs:
 
           exit "$failed"
 
+  markdown:
+    name: "Markdown"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # The config lives in the package root, copied from the webware-alignment
+      # preset. Defaults are unusable: line length and table alignment alone
+      # produce hundreds of findings on documents that render perfectly.
+      - name: Require the lint config
+        run: |
+          if [ ! -f markdownlint-cli2.jsonc ]; then
+            echo "::error::markdownlint-cli2.jsonc is missing. Copy presets/webware-alignment/artifacts/markdownlint-cli2.jsonc from webware-tools into the repository root."
+            exit 1
+          fi
+
+      # Pinned so a rule change cannot red the fleet on its own.
+      - name: Lint Markdown
+        run: npx --yes markdownlint-cli2@0.24.2 --config markdownlint-cli2.jsonc
+
   mago:
     name: "Mago (PHP ${{ matrix.php }})"
     needs: config
