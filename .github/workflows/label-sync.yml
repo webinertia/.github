@@ -6,7 +6,7 @@ name: "Label Sync"
 # survive unnoticed.
 #
 # Dry runs: set the repository variable LABEL_SYNC_DRY_RUN to "true" and every
-# trigger below reports what it would change without writing anything — useful
+# trigger below reports what it would change without writing anything - useful
 # for validating credentials on a push without touching a single label. Unset
 # it (or set it to anything else) to let the job write.
 
@@ -40,12 +40,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # Writing labels into *other* repositories needs a credential that outlives
       # this one: the workflow GITHUB_TOKEN is scoped to webinertia/.github alone.
       #
-      # One-time setup — create a GitHub App owned by the org, install it on all
+      # One-time setup - create a GitHub App owned by the org, install it on all
       # repositories, grant it "Issues: Read and write" + "Metadata: Read", then:
       #   variable LABEL_SYNC_APP_CLIENT_ID   = the App's client ID (a variable,
       #                                         not a secret, so the step can be
@@ -56,19 +58,26 @@ jobs:
       - name: Mint org token
         id: token
         if: ${{ vars.LABEL_SYNC_APP_CLIENT_ID != '' }}
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3
         with:
           client-id: ${{ vars.LABEL_SYNC_APP_CLIENT_ID }}
           private-key: ${{ secrets.LABEL_SYNC_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
+          # The App is installed on every repository because the script fans out
+          # over the whole org, so the owner-wide scope is the requirement.
+          owner: ${{ github.repository_owner }} # zizmor: ignore[github-app] all repos in scope by design
+          # Downscope the minted token to the one permission the script uses.
+          # Label CRUD and issue search are issues:write; metadata is always read.
+          permission-issues: write
 
       - name: Sync labels
         if: ${{ steps.token.outputs.token != '' }}
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
+          INPUT_DRY_RUN: ${{ inputs.dry-run }}
+          VAR_DRY_RUN: ${{ vars.LABEL_SYNC_DRY_RUN }}
         run: |
           args=(./scripts/sync-labels.sh .github/labels.yml)
-          if [[ "${{ inputs.dry-run }}" == "true" || "${{ vars.LABEL_SYNC_DRY_RUN }}" == "true" ]]; then
+          if [[ "$INPUT_DRY_RUN" == "true" || "$VAR_DRY_RUN" == "true" ]]; then
             echo "::notice title=Dry run::LABEL_SYNC_DRY_RUN is set, so no labels will be written."
             args+=(--dry-run)
           fi
