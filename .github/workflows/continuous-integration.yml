@@ -40,6 +40,13 @@ on:
 permissions:
   contents: read
 
+# One run per pull request. A push to the PR cancels the previous run, and no
+# two pull requests ever share a group. The required-workflow check for the head
+# SHA is always a run of the current group.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   config:
     name: "Read webware-ci.json"
@@ -63,7 +70,9 @@ jobs:
       test_env_json: ${{ steps.read.outputs.test_env_json }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Read config
         id: read
@@ -179,7 +188,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # The config lives in the package root, copied from the webware-alignment
       # preset. Defaults are unusable: line length and table alignment alone
@@ -205,10 +216,12 @@ jobs:
         php: ${{ fromJSON(needs.config.outputs.php_versions) }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php }}
           coverage: none
@@ -220,14 +233,18 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer dependencies
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ runner.os }}-php-${{ matrix.php }}-${{ hashFiles('composer.lock') }}
           restore-keys: composer-${{ runner.os }}-php-${{ matrix.php }}-
 
       - name: Install dependencies
-        run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+        env:
+          COMPOSER_OPTIONS: ${{ needs.config.outputs.composer_options }}
+        # Unquoted on purpose: the value is a flag list and must be word-split.
+        # Expansion is not re-parsed, so metacharacters in the value stay literal.
+        run: composer install --no-interaction --no-progress $COMPOSER_OPTIONS
 
       # Overrides php-version from the repository's mago.toml for each matrix
       # leg without mutating the committed config file.
@@ -252,14 +269,16 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Mago ${{ steps.mago-version.outputs.version }}
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php }}
           coverage: none
           tools: mago:${{ steps.mago-version.outputs.version }}
 
       - name: Pin Mago PHP version
-        run: echo "MAGO_PHP_VERSION=${{ matrix.php }}" >> "$GITHUB_ENV"
+        env:
+          MATRIX_PHP: ${{ matrix.php }}
+        run: echo "MAGO_PHP_VERSION=$MATRIX_PHP" >> "$GITHUB_ENV"
 
       # The backstop for "Reject consumer formatter overrides": rather than
       # pattern-matching the config text, resolve the formatter section twice and
@@ -328,10 +347,12 @@ jobs:
         dependencies: ["lowest", "locked", "latest"]
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ matrix.php }}
           coverage: ${{ (matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked') && 'pcov' || 'none' }}
@@ -341,7 +362,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer dependencies
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ runner.os }}-php-${{ matrix.php }}-${{ matrix.dependencies }}-${{ hashFiles('composer.lock') }}
@@ -358,32 +379,48 @@ jobs:
       # the original behaviour of running integration on every leg.
       - name: Start DB service
         if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration) && (needs.config.outputs.integration_php_version == '' || matrix.php == needs.config.outputs.integration_php_version)
+        env:
+          DB_PORT: ${{ needs.config.outputs.db_port }}
+          DB_IMAGE: ${{ needs.config.outputs.db_image }}
+          DB_ENV_JSON: ${{ needs.config.outputs.db_env_json }}
         run: |
           docker run -d --name db \
-            -p ${{ needs.config.outputs.db_port }}:${{ needs.config.outputs.db_port }} \
-            $(echo '${{ needs.config.outputs.db_env_json }}' | jq -r 'to_entries[] | "-e \(.key)=\(.value)"' | tr '\n' ' ') \
-            ${{ needs.config.outputs.db_image }}
+            -p "${DB_PORT}:${DB_PORT}" \
+            $(printf '%s' "$DB_ENV_JSON" | jq -r 'to_entries[] | "-e \(.key)=\(.value)"' | tr '\n' ' ') \
+            "$DB_IMAGE"
 
       - name: Wait for DB to be healthy
         if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration) && (needs.config.outputs.integration_php_version == '' || matrix.php == needs.config.outputs.integration_php_version)
+        env:
+          DB_HEALTH_RETRIES: ${{ needs.config.outputs.db_health_retries }}
+          DB_HEALTH_INTERVAL_SECONDS: ${{ needs.config.outputs.db_health_interval_seconds }}
+          DB_HEALTH_CMD: ${{ needs.config.outputs.db_health_cmd }}
+        # DB_HEALTH_CMD stays unquoted: it is a command plus arguments and must
+        # be word-split. Expansion is not re-parsed, so metacharacters stay literal.
         run: |
-          for i in $(seq 1 ${{ fromJSON(needs.config.outputs.db_health_retries) }}); do
-            docker exec db ${{ needs.config.outputs.db_health_cmd }} && exit 0
-            sleep ${{ fromJSON(needs.config.outputs.db_health_interval_seconds) }}
+          for i in $(seq 1 "$DB_HEALTH_RETRIES"); do
+            docker exec db $DB_HEALTH_CMD && exit 0
+            sleep "$DB_HEALTH_INTERVAL_SECONDS"
           done
           echo "DB did not become healthy in time" && exit 1
 
       - name: Install dependencies (lowest)
         if: matrix.dependencies == 'lowest'
-        run: composer update --prefer-lowest --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+        env:
+          COMPOSER_OPTIONS: ${{ needs.config.outputs.composer_options }}
+        run: composer update --prefer-lowest --no-interaction --no-progress $COMPOSER_OPTIONS
 
       - name: Install dependencies (locked)
         if: matrix.dependencies == 'locked'
-        run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+        env:
+          COMPOSER_OPTIONS: ${{ needs.config.outputs.composer_options }}
+        run: composer install --no-interaction --no-progress $COMPOSER_OPTIONS
 
       - name: Install dependencies (latest)
         if: matrix.dependencies == 'latest'
-        run: composer update --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+        env:
+          COMPOSER_OPTIONS: ${{ needs.config.outputs.composer_options }}
+        run: composer update --no-interaction --no-progress $COMPOSER_OPTIONS
 
       # PHPUnit's <env> will not override an already-set real env var (no
       # force="true"), so this lets a repository override a connection setting
@@ -391,7 +428,9 @@ jobs:
       # for local dev (e.g. Docker Compose networking).
       - name: Export test environment overrides
         if: needs.config.outputs.test_env_json != '{}'
-        run: echo '${{ needs.config.outputs.test_env_json }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        env:
+          TEST_ENV_JSON: ${{ needs.config.outputs.test_env_json }}
+        run: printf '%s' "$TEST_ENV_JSON" | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
       - name: Unit tests
         if: ${{ !(matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked') }}
@@ -407,7 +446,7 @@ jobs:
 
       - name: Upload coverage artifact
         if: matrix.php == needs.config.outputs.coverage_php_version && matrix.dependencies == 'locked'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: coverage-clover
           path: clover.xml
@@ -419,15 +458,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Download coverage artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: coverage-clover
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v7
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           # CODECOV_TOKEN is an org-wide upload token, which cannot infer the
@@ -448,10 +489,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up PHP
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ needs.config.outputs.coverage_php_version }}
           coverage: pcov
@@ -461,7 +504,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
 
       - name: Cache composer dependencies
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ runner.os }}-php-${{ needs.config.outputs.coverage_php_version }}-${{ hashFiles('composer.lock') }}
@@ -469,23 +512,37 @@ jobs:
 
       - name: Start DB service
         if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration)
+        env:
+          DB_PORT: ${{ needs.config.outputs.db_port }}
+          DB_IMAGE: ${{ needs.config.outputs.db_image }}
+          DB_ENV_JSON: ${{ needs.config.outputs.db_env_json }}
         run: |
           docker run -d --name db \
-            -p ${{ needs.config.outputs.db_port }}:${{ needs.config.outputs.db_port }} \
-            $(echo '${{ needs.config.outputs.db_env_json }}' | jq -r 'to_entries[] | "-e \(.key)=\(.value)"' | tr '\n' ' ') \
-            ${{ needs.config.outputs.db_image }}
+            -p "${DB_PORT}:${DB_PORT}" \
+            $(printf '%s' "$DB_ENV_JSON" | jq -r 'to_entries[] | "-e \(.key)=\(.value)"' | tr '\n' ' ') \
+            "$DB_IMAGE"
 
       - name: Wait for DB to be healthy
         if: needs.config.outputs.db_image != '' && fromJSON(needs.config.outputs.run_integration)
+        env:
+          DB_HEALTH_RETRIES: ${{ needs.config.outputs.db_health_retries }}
+          DB_HEALTH_INTERVAL_SECONDS: ${{ needs.config.outputs.db_health_interval_seconds }}
+          DB_HEALTH_CMD: ${{ needs.config.outputs.db_health_cmd }}
+        # DB_HEALTH_CMD stays unquoted: it is a command plus arguments and must
+        # be word-split. Expansion is not re-parsed, so metacharacters stay literal.
         run: |
-          for i in $(seq 1 ${{ fromJSON(needs.config.outputs.db_health_retries) }}); do
-            docker exec db ${{ needs.config.outputs.db_health_cmd }} && exit 0
-            sleep ${{ fromJSON(needs.config.outputs.db_health_interval_seconds) }}
+          for i in $(seq 1 "$DB_HEALTH_RETRIES"); do
+            docker exec db $DB_HEALTH_CMD && exit 0
+            sleep "$DB_HEALTH_INTERVAL_SECONDS"
           done
           echo "DB did not become healthy in time" && exit 1
 
       - name: Install dependencies
-        run: composer install --no-interaction --no-progress ${{ needs.config.outputs.composer_options }}
+        env:
+          COMPOSER_OPTIONS: ${{ needs.config.outputs.composer_options }}
+        # Unquoted on purpose: the value is a flag list and must be word-split.
+        # Expansion is not re-parsed, so metacharacters in the value stay literal.
+        run: composer install --no-interaction --no-progress $COMPOSER_OPTIONS
 
       # Mago is NOT pinned in this workflow either; see the mago job for the
       # rationale. The version comes from the installed webware-tools pin.
@@ -506,7 +563,7 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Mago ${{ steps.mago-version.outputs.version }}
-        uses: shivammathur/setup-php@v2
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
         with:
           php-version: ${{ needs.config.outputs.coverage_php_version }}
           coverage: pcov
@@ -514,10 +571,14 @@ jobs:
 
       - name: Export test environment overrides
         if: needs.config.outputs.test_env_json != '{}'
-        run: echo '${{ needs.config.outputs.test_env_json }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
+        env:
+          TEST_ENV_JSON: ${{ needs.config.outputs.test_env_json }}
+        run: printf '%s' "$TEST_ENV_JSON" | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> "$GITHUB_ENV"
 
       - name: Pin Mago PHP version
-        run: echo "MAGO_PHP_VERSION=${{ needs.config.outputs.coverage_php_version }}" >> "$GITHUB_ENV"
+        env:
+          COVERAGE_PHP: ${{ needs.config.outputs.coverage_php_version }}
+        run: echo "MAGO_PHP_VERSION=$COVERAGE_PHP" >> "$GITHUB_ENV"
 
       # Mago is invoked internally by Infection (staticAnalysisTool in
       # infection.json5) as a per-mutant equivalence filter, which is a separate
@@ -526,4 +587,6 @@ jobs:
       - name: Mutation testing
         env:
           INFECTION_DASHBOARD_API_KEY: ${{ secrets.INFECTION_DASHBOARD_API_KEY }}
-        run: composer mutation-test -- --min-msi=${{ needs.config.outputs.min_msi }} --min-covered-msi=${{ needs.config.outputs.min_covered_msi }} --logger-github
+          MIN_MSI: ${{ needs.config.outputs.min_msi }}
+          MIN_COVERED_MSI: ${{ needs.config.outputs.min_covered_msi }}
+        run: composer mutation-test -- --min-msi="$MIN_MSI" --min-covered-msi="$MIN_COVERED_MSI" --logger-github
