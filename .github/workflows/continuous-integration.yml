@@ -74,6 +74,28 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Reject invalid UTF-8 in tracked files
+        run: |
+          set -euo pipefail
+          # A read and rewrite through a non-UTF-8 pipeline (Windows PowerShell 5.1
+          # Get-Content/Set-Content default to the ANSI code page) replaces multi-byte
+          # characters with mojibake that then survives in the commit. Files carrying a
+          # NUL byte in their first 8000 bytes are treated as binary, matching git's own
+          # heuristic, so images and archives are skipped.
+          status=0
+          while IFS= read -r -d '' file; do
+            head_bytes=$(head -c 8000 -- "$file" | wc -c | tr -d ' ')
+            text_bytes=$(head -c 8000 -- "$file" | tr -d '\0' | wc -c | tr -d ' ')
+            if [ "$head_bytes" -ne "$text_bytes" ]; then
+              continue
+            fi
+            if ! iconv -f UTF-8 -t UTF-8 -- "$file" > /dev/null 2>&1; then
+              echo "::error file=$file::not valid UTF-8. An editor or script wrote it through a non-UTF-8 code page."
+              status=1
+            fi
+          done < <(git ls-files -z)
+          exit "$status"
+
       - name: Read config
         id: read
         run: |
